@@ -1,0 +1,4 @@
+(executable
+ (public_name midi)
+ (name main)
+ (libraries midi portmidi))
