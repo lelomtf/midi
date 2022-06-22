@@ -71,34 +71,79 @@ module Sequence = struct
 
   type t = evenement list 
 
+  let concat a b =
+    b @ a 
 
-  let pause bpm =
+  let rec boucle nombre_de_fois liste =
+    if nombre_de_fois = 0 then
+      []
+    else
+     let liste_repeter = boucle (nombre_de_fois - 1) liste in
+     concat liste liste_repeter
+
+  let make taille =
+    List.init taille (fun i -> Silence)
+
+  let every periode fn liste =
+    List.mapi (fun position valeur -> 
+      if position mod periode = 0 then
+        fn valeur
+      else
+        valeur)
+      liste
+
+
+
+
+  let pause bpm t =
     let duree_battement = 60. /. (Float.of_int bpm) in 
     let duree_pause = duree_battement /. 4. in
-    Unix.sleepf duree_pause
+    Unix.sleepf ((Float.of_int t) *. duree_pause)
 
-  let jouer_note instrument temps code bpm =
-    let message = Event.create ~status:(Codes.on Synth1) ~data1:code ~data2:'\090' ~timestamp:0l in 
-    let _result = Portmidi.write_output instrument  [message] in
-    pause bpm;
-    let message = Event.create ~status:(Codes.off Synth1) ~data1:code ~data2:'\090' ~timestamp:0l in 
-    let _result = Portmidi.write_output instrument  [message] in ()
 
-    let jouer_drum instrument temps code bpm =
-      let message = Event.create ~status:(Codes.on Drum) ~data1:code ~data2:'\090' ~timestamp:0l in 
-      let _result = Portmidi.write_output instrument  [message] in
-      pause bpm;
-      let message = Event.create ~status:(Codes.off Drum) ~data1:code ~data2:'\090' ~timestamp:0l in 
-      let _result = Portmidi.write_output instrument  [message] in ()
 
-  let jouer_evenement instrument bpm evenement  =
-    match evenement with 
-    | Silence -> pause bpm 
-    | Note note -> jouer_note instrument 1 (Note.code note.octave note.note note.diese) bpm
-    | Drum n -> jouer_drum instrument 1 (Drum.code n) bpm
+  
+
+
+
+  let instruction sequence =
+    List.fold_left 
+      (fun (temps, instructions) evenement -> 
+        match evenement with
+        | Silence -> (temps+1, instructions)
+        | Note n -> 
+          let code =
+            Note.code n.octave n.note n.diese in
+          let message_on = Event.create ~status:(Codes.on Synth1) ~data1:code ~data2:'\090' ~timestamp:0l in 
+          let message_off = Event.create ~status:(Codes.off Synth1) ~data1:code ~data2:'\090' ~timestamp:0l in
+        (temps+1, (temps, message_on) :: (temps + 1, message_off) :: instructions)
+        | Drum d ->
+          let code =
+            Drum.code d in
+          let message_on = Event.create ~status:(Codes.on Drum) ~data1:code ~data2:'\090' ~timestamp:0l in 
+          let message_off = Event.create ~status:(Codes.off Drum) ~data1:code ~data2:'\090' ~timestamp:0l in
+        (temps+1, (temps, message_on) :: (temps + 1, message_off) :: instructions)
+        )
+        (0, [])
+        sequence
+    |> snd
+         
+  let rec executer bpm instrument instructions =
+      match instructions with
+      | [] -> ()
+      | [temps, message] -> 
+        let _result = Portmidi.write_output instrument  [message] in ()
+      | (temps1, message1) :: (temps2, message2) :: reste ->
+        let _result = Portmidi.write_output instrument  [message1] in 
+        pause bpm (temps2 - temps1);
+        executer bpm instrument ((temps2, message2) :: reste)
 
   let jouer sequence bpm instrument =
-    List.iter (jouer_evenement instrument bpm) sequence
+    let instructions =
+      instruction sequence 
+      |> List.rev
+    in
+    executer bpm instrument instructions
 end
 
 let seq = [
@@ -119,6 +164,23 @@ let seq = [
   Drum 1;
   Silence
 ]
+|> Sequence.boucle 10
+
+let rapide =
+  Sequence.make 4
+  |> Sequence.every 2 (fun i -> Sequence.Drum 3)
+
+let plus_rapide =
+  Sequence.make 4
+  |> Sequence.every 1 (fun i -> Sequence.Drum 3)
+
+let seq =
+  Sequence.make 8
+  |> Sequence.every 4 (fun i -> Sequence.Drum 3)
+  |> Sequence.concat rapide
+  |> Sequence.concat plus_rapide
+  |> Sequence.boucle 10 
+
 
 let () = 
 let _ = Portmidi.initialize () in 
