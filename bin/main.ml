@@ -127,26 +127,51 @@ module Sequence = struct
         (0, [])
         sequence
     |> snd
+
+    let merge_assoc l1 l2 =
+      let rec aux l1 l2 c =
+        match l1, l2 with
+      | ((t1, e1) :: r1), ((t2, e2) ::r2) ->
+        (
+          if t1=t2 then
+            aux r1 r2 ((t1, e1 @ e2)::c)
+          else if t1<t2 then
+            aux r1 l2 ((t1, e1)::c)
+          else
+            aux l1 r2 ((t2, e2)::c)
+        )
+      | [], ((t2, e2) ::r2) ->
+        aux l1 r2 ((t2, e2)::c)
+      | ((t1, e1) :: r1), [] ->
+        aux r1 l2 ((t1, e1)::c)
+      | [], [] -> c 
+      in
+      List.rev (aux l1 l2 [])
+    let fusion instructions =
+      let rec aux l resultat =
+        match l with
+        | [] -> resultat
+        | e1 :: r -> aux r (merge_assoc resultat (List.map (fun (t, n)-> t, [n]) e1))
+      in
+      aux instructions [] 
          
   let rec executer bpm instrument instructions =
       match instructions with
       | [] -> ()
       | [temps, message] -> 
-        let _result = Portmidi.write_output instrument  [message] in ()
+        let _result = Portmidi.write_output instrument  message in ()
       | (temps1, message1) :: (temps2, message2) :: reste ->
-        let _result = Portmidi.write_output instrument  [message1] in 
+        let _result = Portmidi.write_output instrument  message1 in 
         pause bpm (temps2 - temps1);
         executer bpm instrument ((temps2, message2) :: reste)
 
-  let jouer sequence bpm instrument =
-    let instructions =
-      instruction sequence 
-      |> List.rev
-    in
-    executer bpm instrument instructions
+  let jouer sequences bpm instrument =
+    let instructions = List.map instruction sequences |> List.rev in
+    let total = fusion instructions in
+    executer bpm instrument total
 end
 
-let seq = [
+let seq2 = [
   Sequence.Note {note=Do; octave=2; diese=false};
   Silence;
   Drum 1;
@@ -164,7 +189,7 @@ let seq = [
   Drum 1;
   Silence
 ]
-|> Sequence.boucle 10
+|> Sequence.boucle 1
 
 let rapide =
   Sequence.make 4
@@ -191,4 +216,4 @@ let instrument =
   | Ok instrument -> print_endline "instrument"; instrument
   | Error _ -> print_endline "erreur"; assert false
 in
-Sequence.jouer seq 120 instrument
+Sequence.jouer [seq] 120 instrument
