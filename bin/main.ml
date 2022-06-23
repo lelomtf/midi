@@ -151,7 +151,7 @@ module Sequence = struct
         aux r1 l2 ((t1, e1)::c)
       | [], [] -> c 
       in
-      List.rev (aux l1 l2 [])
+      aux l1 l2 []
     let fusion instructions =
       let rec aux l resultat =
         match l with
