@@ -20,13 +20,16 @@ module Note = struct
   
   type note = Do | Re | Mi | Fa | Sol | La | Si 
 
+  type synth = Codes.canal
+
   type t = {
     note: note;
     octave: int;
     diese: bool;
+    synth: synth;
   }
 
-  let code octave note  diese =
+  let code octave note diese =
     let decalage = 12 * octave + 24 in
     let decalage_note = 
       match note with
@@ -67,6 +70,13 @@ let print_sequence s =
     Printf.printf "%d:  %d\n" t (List.length elt);
   ) s;
   flush_all ()
+
+let print_sequence' s =
+  List.iter (fun (t, elt) ->
+    Printf.printf "%d\n" t;
+  ) s;
+  flush_all ()
+
 module Sequence = struct 
 
   type evenement = 
@@ -76,8 +86,7 @@ module Sequence = struct
 
   type t = evenement list 
 
-  let concat a b =
-    b @ a 
+  let concat a b = b @ a 
 
   let rec boucle nombre_de_fois liste =
     if nombre_de_fois = 0 then
@@ -97,19 +106,10 @@ module Sequence = struct
         valeur)
       liste
 
-
-
-
   let pause bpm t =
     let duree_battement = 60. /. (Float.of_int bpm) in 
     let duree_pause = duree_battement /. 4. in
     Unix.sleepf ((Float.of_int t) *. duree_pause)
-
-
-
-  
-
-
 
   let instruction sequence =
     List.fold_left 
@@ -119,8 +119,8 @@ module Sequence = struct
         | Note n -> 
           let code =
             Note.code n.octave n.note n.diese in
-          let message_on = Event.create ~status:(Codes.on Synth1) ~data1:code ~data2:'\090' ~timestamp:0l in 
-          let message_off = Event.create ~status:(Codes.off Synth1) ~data1:code ~data2:'\090' ~timestamp:0l in
+          let message_on = Event.create ~status:(Codes.on n.synth) ~data1:code ~data2:'\090' ~timestamp:0l in 
+          let message_off = Event.create ~status:(Codes.off n.synth) ~data1:code ~data2:'\090' ~timestamp:0l in
         (temps+1, (temps, message_on) :: (temps + 1, message_off) :: instructions)
         | Drum d ->
           let code =
@@ -131,19 +131,25 @@ module Sequence = struct
         )
         (0, [])
         sequence
-    |> snd
+    |> snd |> List.sort (fun a b -> Int.compare (fst a) (fst b))
 
-    let merge_assoc l1 l2 =
+  let merge_assoc l1 l2 =
       let rec aux l1 l2 c =
-        match l1, l2 with
+      match l1, l2 with
       | ((t1, e1) :: r1), ((t2, e2) ::r2) ->
         (
-          if t1=t2 then
+          if t1=t2 then begin
+            flush_all ();
             aux r1 r2 ((t1, e1 @ e2)::c)
-          else if t1<t2 then
+          end
+          else if t1<t2 then begin
+            flush_all ();
             aux r1 l2 ((t1, e1)::c)
-          else
+          end
+          else begin
+            flush_all ();
             aux l1 r2 ((t2, e2)::c)
+          end
         )
       | [], ((t2, e2) ::r2) ->
         aux l1 r2 ((t2, e2)::c)
@@ -151,8 +157,9 @@ module Sequence = struct
         aux r1 l2 ((t1, e1)::c)
       | [], [] -> c 
       in
-      aux l1 l2 []
-    let fusion instructions =
+      List.rev (aux l1 l2 [])
+
+  let fusion instructions =
       let rec aux l resultat =
         match l with
         | [] -> resultat
@@ -171,33 +178,35 @@ module Sequence = struct
         executer bpm instrument ((temps2, message2) :: reste)
 
   let jouer sequences bpm instrument =
-    let instructions = List.map instruction sequences |> List.rev in
-    let total = fusion instructions in
-    print_sequence total;
+    let instructions = List.map instruction sequences in
+    let sorted =
+      List.map (fun l -> List.sort (fun t1 t2 -> Int.compare (fst t1) (fst t2))l) instructions
+    in
+    let total = fusion sorted in
     executer bpm instrument total
 end
 
 let seq2 = [
-  Sequence.Note {note=Do; octave=2; diese=false};
+  Sequence.Note {note=Do; octave=2; diese=false; synth = Synth1;};
   Silence;
   Drum 1;
   Silence;
-  Sequence.Note {note=Re; octave=2; diese=false};
+  Sequence.Note {note=Re; octave=2; diese=false; synth = Synth1};
   Silence;
   Drum 1;
   Silence;
-  Sequence.Note {note=Do; octave=2; diese=true};
+  Sequence.Note {note=Do; octave=2; diese=true; synth = Synth1;};
   Silence;
   Drum 1;
   Drum 1;
-  Sequence.Note {note=Si; octave=2; diese=false};
+  Sequence.Note {note=Si; octave=2; diese=false; synth = Synth1;};
   Silence;
   Drum 1;
   Silence
 ]
 |> Sequence.boucle 1
 
-let rapide =
+(*let rapide =
   Sequence.make 4
   |> Sequence.every 2 (fun i -> Sequence.Drum 3)
 
@@ -210,23 +219,36 @@ let seq =
   |> Sequence.every 4 (fun i -> Sequence.Drum 3)
   |> Sequence.concat rapide
   |> Sequence.concat plus_rapide
-  |> Sequence.boucle 10  
+  |> Sequence.boucle 10*)
   let drum_seq =
     Sequence.make 8
-    |> Sequence.every 4 (fun i -> Sequence.Drum 3)
+    |> Sequence.every 1 (fun i -> Sequence.Drum 3)
     |> Sequence.boucle 10
-    let kick_seq =
-      Sequence.make 8
-      |> Sequence.every 8 (fun i -> Sequence.Drum 2)
-      |> Sequence.boucle 10
+  
+  let kick_seq = [
+    Sequence.Drum 2;
+    Silence;
+    Silence;
+    Silence;
+    Silence;
+    Silence;
+    Silence;
+    Silence;
+  ]
+  |> Sequence.boucle 10
+
+  let synth_seq =
+    Sequence.make 8
+    |> Sequence.every 2 (fun i -> Sequence.Note {note=Do; octave=2; diese=true; synth = Synth2;})
+    |> Sequence.boucle 10
 
 let () = 
-let _ = Portmidi.initialize () in 
-print_endline "initialize";
-let device = Portmidi.open_output ~device_id:1 ~buffer_size:0l ~latency:0l in 
-let instrument = 
+  let _ = Portmidi.initialize () in 
+  print_endline "initialize";
+  let device = Portmidi.open_output ~device_id:2 ~buffer_size:0l ~latency:0l in 
+  let instrument = 
   match device with
   | Ok instrument -> print_endline "instrument"; instrument
   | Error _ -> print_endline "erreur"; assert false
 in
-Sequence.jouer [drum_seq; kick_seq] 120 instrument
+Sequence.jouer [drum_seq; kick_seq; synth_seq] 120 instrument
