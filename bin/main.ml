@@ -62,6 +62,11 @@ module Drum = struct
       failwith "numero invalide"
 end
 
+let print_sequence s =
+  List.iter (fun (t, elt) ->
+    Printf.printf "%d:  %d\n" t (List.length elt);
+  ) s;
+  flush_all ()
 module Sequence = struct 
 
   type evenement = 
