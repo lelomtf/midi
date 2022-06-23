@@ -226,7 +226,7 @@ let seq =
     |> Sequence.boucle 10
   
   let kick_seq = [
-    Sequence.Drum 2;
+    Sequence.Drum 1;
     Silence;
     Silence;
     Silence;
@@ -238,9 +238,18 @@ let seq =
   |> Sequence.boucle 10
 
   let synth_seq =
-    Sequence.make 8
-    |> Sequence.every 2 (fun i -> Sequence.Note {note=Do; octave=2; diese=true; synth = Synth2;})
-    |> Sequence.boucle 10
+    let seq =
+      Sequence.make 8
+      |> Sequence.every 2 (fun i -> Sequence.Note {note=Do; octave=2; diese=true; synth = Synth2;})
+      |> Sequence.boucle 2
+    in
+    let seq2 = 
+      Sequence.every 2 (fun i -> Sequence.Note {note=Do; octave=3; diese=true; synth = Synth2;}) seq
+      |> Sequence.boucle 2
+    in
+    Sequence.concat seq seq2
+    |> Sequence.boucle 4
+    
 
 let () = 
   let _ = Portmidi.initialize () in 
