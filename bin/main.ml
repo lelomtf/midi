@@ -173,6 +173,7 @@ module Sequence = struct
   let jouer sequences bpm instrument =
     let instructions = List.map instruction sequences |> List.rev in
     let total = fusion instructions in
+    print_sequence total;
     executer bpm instrument total
 end
 
@@ -209,8 +210,15 @@ let seq =
   |> Sequence.every 4 (fun i -> Sequence.Drum 3)
   |> Sequence.concat rapide
   |> Sequence.concat plus_rapide
-  |> Sequence.boucle 10 
-
+  |> Sequence.boucle 10  
+  let drum_seq =
+    Sequence.make 8
+    |> Sequence.every 4 (fun i -> Sequence.Drum 3)
+    |> Sequence.boucle 10
+    let kick_seq =
+      Sequence.make 8
+      |> Sequence.every 8 (fun i -> Sequence.Drum 2)
+      |> Sequence.boucle 10
 
 let () = 
 let _ = Portmidi.initialize () in 
@@ -221,4 +229,4 @@ let instrument =
   | Ok instrument -> print_endline "instrument"; instrument
   | Error _ -> print_endline "erreur"; assert false
 in
-Sequence.jouer [seq] 120 instrument
+Sequence.jouer [drum_seq; kick_seq] 120 instrument
