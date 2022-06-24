@@ -204,7 +204,7 @@ let seq2 = [
   Drum 1;
   Silence
 ]
-|> Sequence.boucle 1
+|> Sequence.boucle 5
 
 (*let rapide =
   Sequence.make 4
@@ -223,8 +223,10 @@ let seq =
   let drum_seq =
     Sequence.make 8
     |> Sequence.every 1 (fun i -> Sequence.Drum 3)
-    |> Sequence.boucle 10
-  
+    |> Sequence.every 2 (fun i -> Sequence.Drum 2)
+    |> Sequence.every 4 (fun i -> Sequence.Drum 1)
+    |> Sequence.boucle 8
+
   let kick_seq = [
     Sequence.Drum 1;
     Silence;
@@ -237,27 +239,81 @@ let seq =
   ]
   |> Sequence.boucle 10
 
+let mi =Sequence.Note {note=Mi; octave=2; diese=false; synth = Synth2;}
+let do_ =Sequence.Note {note=Do; octave=2; diese=false; synth = Synth2;}
+let re =Sequence.Note {note=Re; octave=2; diese=false; synth = Synth2;}
+let fa =Sequence.Note {note=Fa; octave=2; diese=false; synth = Synth2;}
+let sol =Sequence.Note {note=Sol; octave=2; diese=false; synth = Synth2;}
+let si =Sequence.Note {note=Si; octave=2; diese=false; synth = Synth2;}
+let la =Sequence.Note {note=La; octave=2; diese=false; synth = Synth2;}
+let do_aigu=Sequence.Note {note=Do; octave=3; diese=false; synth = Synth2;}
+let si_diese =Sequence.Note {note=Si; octave=2; diese=true; synth = Synth2;}
+
+let change_octave note =
+  match note with
+  | Sequence.Note note -> Sequence.Note {note with octave=note.octave+1}
+  | other -> other
+  let synth_change note =
+    match note with
+    | Sequence.Note note -> Sequence.Note {note with synth=Synth1}
+    | other -> other
+
+let note_aleatoire () =
+  match Random.int 8 with
+  | 0 -> do_
+  | 1 -> re
+  | 2 -> mi
+  | 3 -> fa
+  | 4 -> sol
+  | 5 -> la
+  | 6 -> si
+  | 7 -> Sequence.Silence
+  |_ -> failwith "impossible!!!!"
+  let ()=Random.init 1
+
+  let drum_aleatoire () =
+    match Random.int 10 with
+    | 0 -> Sequence.Drum 1
+    | 1 -> Sequence.Drum 2
+    | 2 -> Sequence.Drum 3
+    | 3 -> Sequence.Drum 4
+    | _ -> Sequence.Silence
+
+
   let synth_seq =
     let seq =
       Sequence.make 8
-      |> Sequence.every 2 (fun i -> Sequence.Note {note=Do; octave=2; diese=true; synth = Synth2;})
+      |> Sequence.every 2 (fun i -> Sequence.Note {note=Sol; octave=1; diese=false; synth = Synth2;})
       |> Sequence.boucle 2
     in
     let seq2 = 
-      Sequence.every 2 (fun i -> Sequence.Note {note=Do; octave=3; diese=true; synth = Synth2;}) seq
-      |> Sequence.boucle 2
+      Sequence.every 2 (fun i -> mi) seq
+      |>Sequence.every 3 (fun i -> mi)
     in
     Sequence.concat seq seq2
-    |> Sequence.boucle 4
+    |> Sequence.boucle 2
     
+let synth_seq =
+  [do_; do_; re; do_; fa; mi; do_; do_; re; do_; sol; fa; do_aigu; do_aigu; do_aigu; la; fa; mi; re; re; si_diese; si_diese; la; fa; sol; fa]
+  let refrain =
+    List.init 15 (fun _ ->  (change_octave (note_aleatoire ())))
+    let drum_refrain =
+      List.init 15 (fun _ -> drum_aleatoire ())
+  let synth_seq =
 
+  List.init 15 (fun _ -> note_aleatoire ()) @ List.map change_octave refrain @ List.rev refrain @ List.init 15 (fun _ -> note_aleatoire ()) @ refrain
+  let synth_seq_bis =
+
+    List.init 15 (fun _ -> note_aleatoire ())
+  let drum_seq =
+    List.init 15 (fun _ -> drum_aleatoire ()) @ drum_refrain @ List.rev drum_refrain @ List.init 15 (fun _ -> drum_aleatoire ()) @ drum_refrain
 let () = 
   let _ = Portmidi.initialize () in 
   print_endline "initialize";
-  let device = Portmidi.open_output ~device_id:2 ~buffer_size:0l ~latency:0l in 
+  let device = Portmidi.open_output ~device_id:1 ~buffer_size:0l ~latency:0l in 
   let instrument = 
   match device with
   | Ok instrument -> print_endline "instrument"; instrument
   | Error _ -> print_endline "erreur"; assert false
 in
-Sequence.jouer [drum_seq; kick_seq; synth_seq] 120 instrument
+Sequence.jouer [drum_seq; (*kick_seq;*) synth_seq synth_seq_bis] 50 instrument
